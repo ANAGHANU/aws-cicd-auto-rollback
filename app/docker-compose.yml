@@ -1,0 +1,8 @@
+services:
+  app:
+    build:
+      context: .
+    container_name: devops-aws-cicd-app
+    ports:
+      - "5000:5000"
+    restart: unless-stopped

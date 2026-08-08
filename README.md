@@ -53,3 +53,14 @@ Documents that the application listens on port 5000.
 CMD ["python", "app.py"]
 
 Starts the application when the container runs.
+
+## Ngix - Security Group:
+
+Internet
+   │
+   ├── :80  → allowed
+   ├── :443 → allowed
+   │
+   └── :5000 → blocked
+
+So the Flask application isn't directly accessible from the Internet.

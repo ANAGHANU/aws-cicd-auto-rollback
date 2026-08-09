@@ -1,0 +1,2 @@
+aws_region        = "ap-south-1"
+state_bucket_name = "devops-aws-cicd-terraform-state-YOUR-UNIQUE-SUFFIX"

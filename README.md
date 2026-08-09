@@ -64,3 +64,17 @@ Internet
    └── :5000 → blocked
 
 So the Flask application isn't directly accessible from the Internet.
+
+## OIDC
+
+OIDC (OpenID Connect) is a secure, secretless authentication method that lets GitHub Actions deploy to AWS using short-lived tokens. It completely eliminates the need to store long-lived AWS Access Keys, removing the risk of leaked credentials. Every time your pipeline runs, GitHub and AWS automatically generate and destroy these temporary keys behind the scenes.
+
+## Bootstap
+
+IAM Bootstrap is the initial process of using a master account or long-lived admin keys to manually set up your baseline cloud infrastructure and OIDC trust. It requires creating permanent credentials that must be tightly secured, stored, and rotated manually. While necessary for the very first deployment, it introduces a permanent leak risk if those bootstrap keys are ever exposed.
+
+## .example = safe template
+
+Developer sees the .example, creates own terraform.tfvars
+.tfvars = actual local configuration
+.gitignore = protection against accidentally committing the actual configuration

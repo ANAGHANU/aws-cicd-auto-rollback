@@ -20,6 +20,13 @@ env/
 crash.log
 crash.*.log
 
+# Terraform variable values
+*.tfvars
+*.tfvars.json
+
+# Keep example configuration
+!*.tfvars.example
+
 # IDE
 .vscode/
 .idea/

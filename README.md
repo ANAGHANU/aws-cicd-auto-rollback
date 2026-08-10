@@ -78,3 +78,15 @@ IAM Bootstrap is the initial process of using a master account or long-lived adm
 Developer sees the .example, creates own terraform.tfvars
 .tfvars = actual local configuration
 .gitignore = protection against accidentally committing the actual configuration
+
+## Public/Private Subnet
+
+A public subnet has a direct route to an Internet Gateway, allowing two-way communication with the public internet. A private subnet has no direct internet route, keeping resources hidden from external threats, though it can use a NAT device for outbound-only updates.
+
+## Terraform
+
+terraform fmt -recursive
+terraform validate
+terraform plan
+terraform apply
+

@@ -1,1 +1,168 @@
-# AWS infrastructure will be added here.
+resource "aws_vpc" "main" {
+  cidr_block           = var.vpc_cidr
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+
+  tags = {
+    Name = "devops-aws-cicd-vpc"
+  }
+}
+
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "devops-aws-cicd-igw"
+  }
+}
+
+resource "aws_subnet" "public" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = var.public_subnet_cidr
+  availability_zone       = var.availability_zone
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name = "devops-aws-cicd-public-subnet"
+    Tier = "public"
+  }
+}
+
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "devops-aws-cicd-public-rt"
+  }
+}
+
+resource "aws_route" "public_internet" {
+  route_table_id         = aws_route_table.public.id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.main.id
+}
+
+resource "aws_route_table_association" "public" {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_security_group" "web" {
+  name        = "devops-aws-cicd-web-sg"
+  description = "Security group for the DevOps application EC2 instance"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description = "HTTP"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "HTTPS"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "Allow outbound IPv4 traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "devops-aws-cicd-web-sg"
+  }
+}
+
+resource "aws_iam_role" "ec2" {
+  name = "devops-aws-cicd-ec2-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+
+    Statement = [
+      {
+        Effect = "Allow"
+
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  tags = {
+    Name = "devops-aws-cicd-ec2-role"
+  }
+}
+
+resource "aws_iam_instance_profile" "ec2" {
+  name = "devops-aws-cicd-ec2-profile"
+  role = aws_iam_role.ec2.name
+
+  tags = {
+    Name = "devops-aws-cicd-ec2-profile"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "ec2_ecr_pull" {
+  role       = aws_iam_role.ec2.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPullOnly"
+}
+
+data "aws_ssm_parameter" "amazon_linux" {
+  name = var.ami_ssm_parameter
+}
+
+resource "aws_iam_role_policy_attachment" "ec2_ssm" {
+  role       = aws_iam_role.ec2.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_instance" "app" {
+  ami                         = data.aws_ssm_parameter.amazon_linux.value
+  instance_type               = var.instance_type
+  subnet_id                   = aws_subnet.public.id
+  vpc_security_group_ids      = [aws_security_group.web.id]
+  associate_public_ip_address = true
+
+  iam_instance_profile = aws_iam_instance_profile.ec2.name
+
+  user_data = <<-EOF
+              #!/bin/bash
+
+              set -e
+
+              exec > >(tee /var/log/devops-bootstrap.log | logger -t devops-bootstrap -s 2>/dev/console) 2>&1
+
+              echo "Starting EC2 bootstrap..."
+
+              dnf update -y
+              dnf install -y docker
+
+              systemctl enable docker
+              systemctl start docker
+
+              usermod -aG docker ec2-user
+
+              echo "Docker installation completed."
+              docker --version
+              EOF
+
+  root_block_device {
+    encrypted = true
+  }
+
+  tags = {
+    Name = "devops-aws-cicd-app"
+  }
+}

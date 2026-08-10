@@ -134,3 +134,38 @@ resource "aws_iam_role_policy" "github_terraform_iam" {
     ]
   })
 }
+
+resource "aws_iam_role_policy" "github_terraform_state" {
+  name = "devops-aws-cicd-terraform-state"
+  role = aws_iam_role.github_terraform.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+
+    Statement = [
+      {
+        Effect = "Allow"
+
+        Action = [
+          "s3:ListBucket"
+        ]
+
+        Resource = aws_s3_bucket.terraform_state.arn
+      },
+      {
+        Effect = "Allow"
+
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject"
+        ]
+
+        Resource = [
+          "${aws_s3_bucket.terraform_state.arn}/devops-aws-cicd/prod/terraform.tfstate",
+          "${aws_s3_bucket.terraform_state.arn}/devops-aws-cicd/prod/terraform.tfstate.tflock"
+        ]
+      }
+    ]
+  })
+}

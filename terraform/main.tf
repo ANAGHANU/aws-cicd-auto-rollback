@@ -114,9 +114,41 @@ resource "aws_iam_instance_profile" "ec2" {
   }
 }
 
-resource "aws_iam_role_policy_attachment" "ec2_ecr_pull" {
-  role       = aws_iam_role.ec2.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPullOnly"
+# resource "aws_iam_role_policy_attachment" "ec2_ecr_pull" {
+#   role       = aws_iam_role.ec2.name
+#   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPullOnly"
+# }
+
+resource "aws_iam_role_policy" "ec2_ecr_pull" {
+  name = "devops-aws-cicd-ec2-ecr-pull"
+  role = aws_iam_role.ec2.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+
+    Statement = [
+      {
+        Effect = "Allow"
+
+        Action = [
+          "ecr:GetAuthorizationToken"
+        ]
+
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage"
+        ]
+
+        Resource = aws_ecr_repository.app.arn
+      }
+    ]
+  })
 }
 
 data "aws_ssm_parameter" "amazon_linux" {
@@ -165,4 +197,40 @@ resource "aws_instance" "app" {
   tags = {
     Name = "devops-aws-cicd-app"
   }
+}
+
+resource "aws_ecr_repository" "app" {
+  name                 = "devops-aws-cicd-app"
+  image_tag_mutability = "IMMUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = {
+    Name = "devops-aws-cicd-app-ecr"
+  }
+}
+
+resource "aws_ecr_lifecycle_policy" "app" {
+  repository = aws_ecr_repository.app.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Keep the 20 most recent images"
+
+        selection = {
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 20
+        }
+
+        action = {
+          type = "expire"
+        }
+      }
+    ]
+  })
 }

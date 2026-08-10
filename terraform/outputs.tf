@@ -47,3 +47,18 @@ output "ec2_iam_role" {
   description = "IAM role attached to the application EC2 instance"
   value       = aws_iam_role.ec2.name
 }
+
+output "ecr_repository_name" {
+  description = "Name of the application ECR repository"
+  value       = aws_ecr_repository.app.name
+}
+
+output "ecr_repository_url" {
+  description = "URL of the application ECR repository"
+  value       = aws_ecr_repository.app.repository_url
+}
+
+output "ecr_repository_arn" {
+  description = "ARN of the application ECR repository"
+  value       = aws_ecr_repository.app.arn
+}

@@ -90,3 +90,12 @@ terraform validate
 terraform plan
 terraform apply
 
+### CI/CD & AWS OIDC
+
+- Configured GitHub OIDC for secure GitHub Actions authentication with AWS.
+- Created an IAM role for GitHub Actions with required AWS permissions.
+- Restricted IAM role access to the specific GitHub repository and `main` branch.
+- Configured GitHub Actions workflow for AWS authentication and deployment.
+- Prepared the CI/CD pipeline to deploy the Dockerized application to EC2.
+
+

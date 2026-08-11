@@ -1,3 +1,10 @@
+name: AWS OIDC Test
+
+on:
+  push:
+    branches:
+      - main
+
 permissions:
   id-token: write
   contents: read
@@ -40,3 +47,6 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::340593397664:role/devops-aws-cicd-github-terraform
           aws-region: ap-south-1
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity

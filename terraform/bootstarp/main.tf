@@ -127,6 +127,7 @@ resource "aws_iam_role_policy" "github_terraform_iam" {
           "iam:AddRoleToInstanceProfile",
           "iam:RemoveRoleFromInstanceProfile",
           "iam:TagInstanceProfile",
+          "iam:GetRolePolicy",
           "iam:PassRole"
         ]
 

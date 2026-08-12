@@ -33,9 +33,9 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6.2.3
         with:
-          role-to-assume: arn:aws:iam::340593937664:role/devops-aws-cicd-github-application
+          role-to-assume: arn:aws:iam::340593397664:role/devops-aws-cicd-github-application
           aws-region: ${{ env.AWS_REGION }}
-          allowed-account-ids: 340593937664
+          allowed-account-ids: 340593397664
 
       - name: Login to Amazon ECR
         id: ecr

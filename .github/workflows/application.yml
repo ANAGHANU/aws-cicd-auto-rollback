@@ -1,5 +1,5 @@
 name: Application CI/CD
-
+run-name: Application Deployment - ${{ github.event.head_commit.message || 'Manual Run' }}
 on:
   push:
     branches:

@@ -82,6 +82,7 @@ resource "aws_iam_role" "github_terraform" {
           StringLike = {
             "token.actions.githubusercontent.com:sub" = [
               "repo:ANAGHANU@90793496/devops-aws-cicd@1327489396:ref:refs/heads/main",
+              "repo:ANAGHANU@90793496/devops-aws-cicd@1327489396:pull_request",
               "repo:ANAGHANU@90793496/devops-aws-cicd@1327489396:environment:production"
             ]
           }

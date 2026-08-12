@@ -1,0 +1,147 @@
+name: Application CI/CD
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "app/**"
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REPOSITORY: devops-aws-cicd-app
+
+jobs:
+  build-and-deploy:
+    name: Build and Deploy Application
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set image tag
+        id: image
+        run: echo "tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: arn:aws:iam::340593937664:role/devops-aws-cicd-github-application
+          aws-region: ${{ env.AWS_REGION }}
+          allowed-account-ids: 340593937664
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Docker image
+        working-directory: app
+        run: |
+          docker build \
+            -t ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image.outputs.tag }} \
+            .
+
+      - name: Test Docker image
+        run: |
+          docker run -d \
+            --name devops-app-test \
+            -p 5000:5000 \
+            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image.outputs.tag }}
+
+          sleep 5
+
+          curl --fail http://localhost:5000/health
+
+          docker stop devops-app-test
+          docker rm devops-app-test
+
+      - name: Push Docker image to ECR
+        run: |
+          docker push \
+            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image.outputs.tag }}
+
+      - name: Get EC2 instance ID
+        id: ec2
+        run: |
+          INSTANCE_ID=$(aws ec2 describe-instances \
+            --filters \
+              "Name=tag:Name,Values=devops-aws-cicd-app" \
+              "Name=instance-state-name,Values=running" \
+            --query "Reservations[0].Instances[0].InstanceId" \
+            --output text)
+
+          if [ "$INSTANCE_ID" = "None" ] || [ -z "$INSTANCE_ID" ]; then
+            echo "Running application EC2 instance not found."
+            exit 1
+          fi
+
+          echo "instance_id=$INSTANCE_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy to EC2
+        env:
+          INSTANCE_ID: ${{ steps.ec2.outputs.instance_id }}
+          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+          IMAGE_TAG: ${{ steps.image.outputs.tag }}
+        run: |
+          COMPOSE_CONTENT=$(base64 -w 0 app/docker-compose.prod.yml)
+          NGINX_CONTENT=$(base64 -w 0 app/nginx/nginx.conf)
+
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy application $IMAGE_TAG" \
+            --parameters commands="[
+              \"set -e\",
+              \"mkdir -p /opt/devops-aws-cicd\",
+              \"echo '$COMPOSE_CONTENT' | base64 -d > /opt/devops-aws-cicd/docker-compose.prod.yml\",
+              \"echo '$NGINX_CONTENT' | base64 -d > /opt/devops-aws-cicd/nginx.conf\",
+              \"cd /opt/devops-aws-cicd\",
+              \"aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY\",
+              \"export ECR_REGISTRY=$ECR_REGISTRY\",
+              \"export ECR_REPOSITORY=$ECR_REPOSITORY\",
+              \"export IMAGE_TAG=$IMAGE_TAG\",
+              \"docker compose -f docker-compose.prod.yml pull\",
+              \"docker compose -f docker-compose.prod.yml up -d --remove-orphans\",
+              \"docker compose -f docker-compose.prod.yml ps\"
+            ]" \
+            --query "Command.CommandId" \
+            --output text)
+
+          echo "SSM Command ID: $COMMAND_ID"
+
+          for i in {1..30}; do
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$INSTANCE_ID" \
+              --query "Status" \
+              --output text)
+
+            echo "Deployment status: $STATUS"
+
+            case "$STATUS" in
+              Success)
+                exit 0
+                ;;
+              Failed|Cancelled|TimedOut|Cancelling)
+                echo "Deployment failed."
+
+                aws ssm get-command-invocation \
+                  --command-id "$COMMAND_ID" \
+                  --instance-id "$INSTANCE_ID"
+
+                exit 1
+                ;;
+            esac
+
+            sleep 5
+          done
+
+          echo "Deployment timed out."
+          exit 1

@@ -234,3 +234,108 @@ resource "aws_ecr_lifecycle_policy" "app" {
     ]
   })
 }
+
+data "aws_iam_openid_connect_provider" "github" {
+  url = "https://token.actions.githubusercontent.com"
+}
+
+resource "aws_iam_role" "github_application" {
+  name = "devops-aws-cicd-github-application"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+
+    Statement = [
+      {
+        Effect = "Allow"
+
+        Principal = {
+          Federated = data.aws_iam_openid_connect_provider.github.arn
+        }
+
+        Action = "sts:AssumeRoleWithWebIdentity"
+
+        Condition = {
+          StringEquals = {
+            "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+            "token.actions.githubusercontent.com:sub" = "repo:ANAGHANU@90793496/devops-aws-cicd@1327489396:ref:refs/heads/main"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name      = "devops-aws-cicd-github-application"
+    Project   = "devops-aws-cicd"
+    ManagedBy = "Terraform"
+  }
+}
+
+resource "aws_iam_role_policy" "github_application_ecr" {
+  name = "devops-aws-cicd-github-ecr"
+  role = aws_iam_role.github_application.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+
+    Statement = [
+      {
+        Effect = "Allow"
+
+        Action = [
+          "ecr:GetAuthorizationToken"
+        ]
+
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:CompleteLayerUpload",
+          "ecr:InitiateLayerUpload",
+          "ecr:PutImage",
+          "ecr:UploadLayerPart"
+        ]
+
+        Resource = aws_ecr_repository.app.arn
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "github_application_ssm" {
+  name = "devops-aws-cicd-github-ssm"
+  role = aws_iam_role.github_application.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+
+    Statement = [
+      {
+        Effect = "Allow"
+
+        Action = [
+          "ssm:SendCommand"
+        ]
+
+        Resource = [
+          "arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript",
+          aws_instance.app.arn
+        ]
+      },
+      {
+        Effect = "Allow"
+
+        Action = [
+          "ssm:GetCommandInvocation"
+        ]
+
+        Resource = "*"
+      }
+    ]
+  })
+}
+

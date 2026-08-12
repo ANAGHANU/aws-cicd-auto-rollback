@@ -114,6 +114,7 @@ resource "aws_iam_role_policy" "github_terraform_iam" {
         Effect = "Allow"
 
         Action = [
+          "iam:ListOpenIDConnectProviders",
           "iam:CreateRole",
           "iam:DeleteRole",
           "iam:GetRole",

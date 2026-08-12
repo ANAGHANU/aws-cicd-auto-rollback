@@ -4,7 +4,7 @@ resource "aws_vpc" "main" {
   enable_dns_hostnames = true
 
   tags = {
-    Name = "devops-aws-cicd-vpc-testv2"
+    Name = "devops-aws-cicd-vpc"
   }
 }
 

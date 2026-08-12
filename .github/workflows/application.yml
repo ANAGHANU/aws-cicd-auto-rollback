@@ -1,5 +1,5 @@
 name: Application CI/CD
-run-name: Application Deployment - ${{ github.event.head_commit.message || 'Manual Run' }}
+
 on:
   push:
     branches:
@@ -103,7 +103,6 @@ jobs:
               \"echo '$COMPOSE_CONTENT' | base64 -d > /opt/devops-aws-cicd/docker-compose.prod.yml\",
               \"echo '$NGINX_CONTENT' | base64 -d > /opt/devops-aws-cicd/nginx.conf\",
               \"cd /opt/devops-aws-cicd\",
-              \"if ! docker compose version >/dev/null 2>&1; then echo 'Docker Compose not found. Installing...'; mkdir -p /usr/local/lib/docker/cli-plugins; curl -SL https://github.com/docker/compose/releases/download/v5.1.2/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose; chmod +x /usr/local/lib/docker/cli-plugins/docker-compose; fi\",
               \"docker compose version\",
               \"aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY\",
               \"export ECR_REGISTRY=$ECR_REGISTRY\",

@@ -96,29 +96,43 @@ jobs:
           DEPLOY_SCRIPT=$(cat <<EOF
           set -e
 
-          mkdir -p /opt/devops-aws-cicd
+          APP_DIR="/opt/devops-aws-cicd"
 
-          echo '$COMPOSE_CONTENT' | base64 -d > /opt/devops-aws-cicd/docker-compose.prod.yml
-          echo '$NGINX_CONTENT' | base64 -d > /opt/devops-aws-cicd/nginx.conf
+          mkdir -p "\$APP_DIR"
 
-          cd /opt/devops-aws-cicd
+          echo '$COMPOSE_CONTENT' | base64 -d > "\$APP_DIR/docker-compose.prod.yml"
+          echo '$NGINX_CONTENT' | base64 -d > "\$APP_DIR/nginx.conf"
 
+          cd "\$APP_DIR"
+
+          echo "Checking Docker Compose..."
           docker compose version
 
+          echo "Logging in to ECR..."
           aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
 
-          export ECR_REGISTRY=$ECR_REGISTRY
-          export ECR_REPOSITORY=$ECR_REPOSITORY
-          export IMAGE_TAG=$IMAGE_TAG
+          export ECR_REGISTRY="$ECR_REGISTRY"
+          export ECR_REPOSITORY="$ECR_REPOSITORY"
+          export IMAGE_TAG="$IMAGE_TAG"
 
-          if [ -f /opt/devops-aws-cicd/current_image_tag ]; then
-            cp /opt/devops-aws-cicd/current_image_tag /opt/devops-aws-cicd/previous_image_tag
+          echo "Current image before deployment:"
+          if [ -f "\$APP_DIR/current_image_tag" ]; then
+            cat "\$APP_DIR/current_image_tag"
+          else
+            echo "No current image recorded."
           fi
 
+          if [ -f "\$APP_DIR/current_image_tag" ]; then
+            cp "\$APP_DIR/current_image_tag" "\$APP_DIR/previous_image_tag"
+          fi
+
+          echo "Pulling application image..."
           docker compose -f docker-compose.prod.yml pull
 
+          echo "Starting application..."
           docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
+          echo "Container status:"
           docker compose -f docker-compose.prod.yml ps
 
           echo "Waiting for application health check..."
@@ -127,14 +141,14 @@ jobs:
             if curl --fail --silent http://localhost/health; then
               echo "Application health check passed."
 
-              echo "$IMAGE_TAG" > /opt/devops-aws-cicd/current_image_tag
+              echo "\$IMAGE_TAG" > "\$APP_DIR/current_image_tag"
 
               echo "Current image tag:"
-              cat /opt/devops-aws-cicd/current_image_tag
+              cat "\$APP_DIR/current_image_tag"
 
               echo "Previous image tag:"
-              if [ -f /opt/devops-aws-cicd/previous_image_tag ]; then
-                cat /opt/devops-aws-cicd/previous_image_tag
+              if [ -f "\$APP_DIR/previous_image_tag" ]; then
+                cat "\$APP_DIR/previous_image_tag"
               else
                 echo "No previous image yet."
               fi
@@ -147,15 +161,69 @@ jobs:
           done
 
           echo "Application health check failed."
+          echo "Starting automatic rollback..."
+
+          if [ ! -f "\$APP_DIR/current_image_tag" ]; then
+            echo "No known-good image found."
+            echo "Automatic rollback cannot continue."
+            exit 1
+          fi
+
+          ROLLBACK_TAG=\$(cat "\$APP_DIR/current_image_tag")
+
+          if [ -z "\$ROLLBACK_TAG" ]; then
+            echo "Current image tag is empty."
+            echo "Automatic rollback cannot continue."
+            exit 1
+          fi
+
+          echo "Rolling back to known-good image:"
+          echo "\$ROLLBACK_TAG"
+
+          export IMAGE_TAG="\$ROLLBACK_TAG"
+
+          echo "Pulling rollback image..."
+          docker compose -f docker-compose.prod.yml pull
+
+          echo "Starting rollback deployment..."
+          docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+          echo "Rollback container status:"
+          docker compose -f docker-compose.prod.yml ps
+
+          echo "Waiting for rollback health check..."
+
+          for i in {1..12}; do
+            if curl --fail --silent http://localhost/health; then
+              echo "Automatic rollback health check passed."
+
+              echo "Application restored to:"
+              echo "\$ROLLBACK_TAG"
+
+              echo "Current image tag remains:"
+              cat "\$APP_DIR/current_image_tag"
+
+              echo "Automatic rollback completed successfully."
+
+              exit 1
+            fi
+
+            echo "Rollback health check attempt \$i failed. Retrying..."
+            sleep 5
+          done
+
+          echo "Automatic rollback failed."
           exit 1
           EOF
           )
+
+          SCRIPT_CONTENT=$(printf '%s\n' "$DEPLOY_SCRIPT" | base64 -w 0)
 
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
             --comment "Deploy application $IMAGE_TAG" \
-            --parameters "commands=$(printf '%s\n' "$DEPLOY_SCRIPT" | jq -R -s 'split("\n") | map(select(length > 0))')" \
+            --parameters "commands=[\"echo '$SCRIPT_CONTENT' | base64 -d > /tmp/devops-deploy.sh\", \"chmod +x /tmp/devops-deploy.sh\", \"/tmp/devops-deploy.sh\"]" \
             --query "Command.CommandId" \
             --output text)
 
@@ -172,15 +240,17 @@ jobs:
 
             case "$STATUS" in
               Success)
-
                 echo "Deployment completed successfully."
+
                 aws ssm get-command-invocation \
                   --command-id "$COMMAND_ID" \
                   --instance-id "$INSTANCE_ID" \
                   --query "StandardOutputContent" \
                   --output text
+
                 exit 0
                 ;;
+
               Failed|Cancelled|TimedOut|Cancelling)
                 echo "Deployment failed."
 

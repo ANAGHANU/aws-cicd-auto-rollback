@@ -1105,8 +1105,9 @@ First destroy the main infrastructure:
 
 ``` bash
 cd terraform
+terraform plan -destroy
 terraform destroy
-```
+(ECR - force_delete = true)```
 
 Then destroy the bootstrap resources:
 
@@ -1117,6 +1118,13 @@ terraform destroy
 
 This intentionally removes the remote Terraform state backend and lock
 table as part of a complete project shutdown.
+
+## Skip the workflow for this commit
+git add .
+git commit -m "Update Terraform resource cleanup [skip ci]"
+git push origin main
+
+GitHub recognizes [skip ci] / [ci skip] in commit messages.
 
 ## Full rebuild
 

@@ -96,13 +96,17 @@ jobs:
               echo "Current image before rollback:"
               echo "$CURRENT_TAG"
 
-              echo "Rolled back image:"
+              echo "Rolling back to:"
               echo "$ROLLBACK_TAG"
 
+              echo "$CURRENT_TAG" > previous_image_tag
               echo "$ROLLBACK_TAG" > current_image_tag
 
               echo "Current image after rollback:"
               cat current_image_tag
+
+              echo "Previous image after rollback:"
+              cat previous_image_tag
 
               exit 0
             fi

@@ -93,30 +93,69 @@ jobs:
           COMPOSE_CONTENT=$(base64 -w 0 app/docker-compose.prod.yml)
           NGINX_CONTENT=$(base64 -w 0 app/nginx/nginx.conf)
 
+          DEPLOY_SCRIPT=$(cat <<EOF
+          set -e
+
+          mkdir -p /opt/devops-aws-cicd
+
+          echo '$COMPOSE_CONTENT' | base64 -d > /opt/devops-aws-cicd/docker-compose.prod.yml
+          echo '$NGINX_CONTENT' | base64 -d > /opt/devops-aws-cicd/nginx.conf
+
+          cd /opt/devops-aws-cicd
+
+          docker compose version
+
+          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+
+          export ECR_REGISTRY=$ECR_REGISTRY
+          export ECR_REPOSITORY=$ECR_REPOSITORY
+          export IMAGE_TAG=$IMAGE_TAG
+
+          if [ -f /opt/devops-aws-cicd/current_image_tag ]; then
+            cp /opt/devops-aws-cicd/current_image_tag /opt/devops-aws-cicd/previous_image_tag
+          fi
+
+          docker compose -f docker-compose.prod.yml pull
+
+          docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+          docker compose -f docker-compose.prod.yml ps
+
+          echo "Waiting for application health check..."
+
+          for i in {1..12}; do
+            if curl --fail --silent http://localhost/health; then
+              echo "Application health check passed."
+
+              echo "$IMAGE_TAG" > /opt/devops-aws-cicd/current_image_tag
+
+              echo "Current image tag:"
+              cat /opt/devops-aws-cicd/current_image_tag
+
+              echo "Previous image tag:"
+              if [ -f /opt/devops-aws-cicd/previous_image_tag ]; then
+                cat /opt/devops-aws-cicd/previous_image_tag
+              else
+                echo "No previous image yet."
+              fi
+
+              exit 0
+            fi
+
+            echo "Health check attempt \$i failed. Retrying..."
+            sleep 5
+          done
+
+          echo "Application health check failed."
+          exit 1
+          EOF
+          )
+
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
             --comment "Deploy application $IMAGE_TAG" \
-            --parameters commands="[
-              \"set -e\",
-              \"mkdir -p /opt/devops-aws-cicd\",
-              \"echo '$COMPOSE_CONTENT' | base64 -d > /opt/devops-aws-cicd/docker-compose.prod.yml\",
-              \"echo '$NGINX_CONTENT' | base64 -d > /opt/devops-aws-cicd/nginx.conf\",
-              \"cd /opt/devops-aws-cicd\",
-              \"docker compose version\",
-              \"aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY\",
-              \"export ECR_REGISTRY=$ECR_REGISTRY\",
-              \"export ECR_REPOSITORY=$ECR_REPOSITORY\",
-              \"export IMAGE_TAG=$IMAGE_TAG\",
-              \"if [ -f current_image_tag ]; then cp current_image_tag previous_image_tag; fi\",
-              \"docker compose -f docker-compose.prod.yml pull\",
-              \"docker compose -f docker-compose.prod.yml up -d --remove-orphans\",
-              \"docker compose -f docker-compose.prod.yml ps\",
-              \"echo 'Waiting for application health check...'\",
-              \"for i in {1..12}; do if curl --fail --silent http://localhost/health; then echo 'Application health check passed.'; echo \"$IMAGE_TAG\" > /opt/devops-aws-cicd/current_image_tag; echo 'Current image tag:'; cat /opt/devops-aws-cicd/current_image_tag; echo 'Previous image tag:'; if [ -f /opt/devops-aws-cicd/previous_image_tag ]; then cat /opt/devops-aws-cicd/previous_image_tag; else echo 'No previous image yet.'; fi; exit 0; fi; echo \"Health check attempt $i failed. Retrying...\"; sleep 5; done\",
-              \"echo 'Application health check failed.'\",
-              \"exit 1\"
-            ]" \
+            --parameters "commands=$(printf '%s\n' "$DEPLOY_SCRIPT" | jq -R -s 'split("\n") | map(select(length > 0))')" \
             --query "Command.CommandId" \
             --output text)
 

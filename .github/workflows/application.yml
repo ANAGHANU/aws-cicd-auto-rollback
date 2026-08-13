@@ -132,12 +132,8 @@ jobs:
           echo "Starting application..."
           docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
-          # ============================================================
-          # INTENTIONAL ROLLBACK TEST
-          # Uncomment these lines only when testing rollback.
-          # ============================================================
-          # echo "INTENTIONAL ROLLBACK TEST: stopping nginx"
-          # docker compose -f docker-compose.prod.yml stop nginx
+          echo "INTENTIONAL ROLLBACK TEST: stopping nginx"
+          docker compose -f docker-compose.prod.yml stop nginx
 
           echo "Container status:"
           docker compose -f docker-compose.prod.yml ps
@@ -150,12 +146,15 @@ jobs:
 
               echo "\$IMAGE_TAG" > "\$APP_DIR/current_image_tag"
 
-              echo "========================================"
-              echo "DEPLOYMENT SUCCEEDED"
-              echo "Application is healthy."
-              echo "Running image:"
+              echo "Current image tag:"
               cat "\$APP_DIR/current_image_tag"
-              echo "========================================"
+
+              echo "Previous image tag:"
+              if [ -f "\$APP_DIR/previous_image_tag" ]; then
+                cat "\$APP_DIR/previous_image_tag"
+              else
+                echo "No previous image yet."
+              fi
 
               exit 0
             fi
@@ -164,18 +163,12 @@ jobs:
             sleep 5
           done
 
-          echo "========================================"
-          echo "DEPLOYMENT FAILED — STARTING AUTOMATIC ROLLBACK"
-          echo "New deployment failed the health check."
-          echo "========================================"
+          echo "Application health check failed."
+          echo "Starting automatic rollback..."
 
           if [ ! -f "\$APP_DIR/current_image_tag" ]; then
             echo "No known-good image found."
             echo "Automatic rollback cannot continue."
-            echo "========================================"
-            echo "DEPLOYMENT FAILED — ROLLBACK FAILED"
-            echo "Manual intervention required."
-            echo "========================================"
             exit 1
           fi
 
@@ -184,10 +177,6 @@ jobs:
           if [ -z "\$ROLLBACK_TAG" ]; then
             echo "Current image tag is empty."
             echo "Automatic rollback cannot continue."
-            echo "========================================"
-            echo "DEPLOYMENT FAILED — ROLLBACK FAILED"
-            echo "Manual intervention required."
-            echo "========================================"
             exit 1
           fi
 
@@ -209,17 +198,23 @@ jobs:
 
           for i in {1..12}; do
             if curl --fail --silent http://localhost/health; then
+              echo "Automatic rollback health check passed."
 
-              echo "========================================"
-              echo "DEPLOYMENT FAILED — ROLLBACK SUCCEEDED"
-              echo "New deployment failed the health check."
-              echo "Previous version was restored successfully."
-              echo "Application is healthy."
-              echo "Running image:"
+              echo "Application restored to:"
               echo "\$ROLLBACK_TAG"
-              echo "========================================"
 
-              echo "\$ROLLBACK_TAG" > "\$APP_DIR/current_image_tag"
+              echo "Current image tag remains:"
+              cat "\$APP_DIR/current_image_tag"
+
+              echo "============================================================"
+              echo "DEPLOYMENT FAILED — ROLLBACK SUCCEEDED"
+              echo "============================================================"
+              echo "The new application deployment failed its health check."
+              echo "The previous known-good version was restored successfully."
+              echo "Application is healthy."
+              echo "Restored image: \$ROLLBACK_TAG"
+              echo "GitHub Actions will remain FAILED because the new deployment failed."
+              echo "============================================================"
 
               exit 1
             fi
@@ -228,12 +223,7 @@ jobs:
             sleep 5
           done
 
-          echo "========================================"
-          echo "DEPLOYMENT FAILED — ROLLBACK FAILED"
-          echo "Automatic rollback could not restore the previous version."
-          echo "Manual intervention required."
-          echo "========================================"
-
+          echo "Automatic rollback failed."
           exit 1
           EOF
           )

@@ -132,8 +132,12 @@ jobs:
           echo "Starting application..."
           docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
-          echo "INTENTIONAL ROLLBACK TEST: stopping nginx"
-          docker compose -f docker-compose.prod.yml stop nginx
+          # ============================================================
+          # INTENTIONAL ROLLBACK TEST
+          # Uncomment these lines only when testing rollback.
+          # ============================================================
+          # echo "INTENTIONAL ROLLBACK TEST: stopping nginx"
+          # docker compose -f docker-compose.prod.yml stop nginx
 
           echo "Container status:"
           docker compose -f docker-compose.prod.yml ps
@@ -146,15 +150,12 @@ jobs:
 
               echo "\$IMAGE_TAG" > "\$APP_DIR/current_image_tag"
 
-              echo "Current image tag:"
+              echo "========================================"
+              echo "DEPLOYMENT SUCCEEDED"
+              echo "Application is healthy."
+              echo "Running image:"
               cat "\$APP_DIR/current_image_tag"
-
-              echo "Previous image tag:"
-              if [ -f "\$APP_DIR/previous_image_tag" ]; then
-                cat "\$APP_DIR/previous_image_tag"
-              else
-                echo "No previous image yet."
-              fi
+              echo "========================================"
 
               exit 0
             fi
@@ -163,12 +164,18 @@ jobs:
             sleep 5
           done
 
-          echo "Application health check failed."
-          echo "Starting automatic rollback..."
+          echo "========================================"
+          echo "DEPLOYMENT FAILED — STARTING AUTOMATIC ROLLBACK"
+          echo "New deployment failed the health check."
+          echo "========================================"
 
           if [ ! -f "\$APP_DIR/current_image_tag" ]; then
             echo "No known-good image found."
             echo "Automatic rollback cannot continue."
+            echo "========================================"
+            echo "DEPLOYMENT FAILED — ROLLBACK FAILED"
+            echo "Manual intervention required."
+            echo "========================================"
             exit 1
           fi
 
@@ -177,6 +184,10 @@ jobs:
           if [ -z "\$ROLLBACK_TAG" ]; then
             echo "Current image tag is empty."
             echo "Automatic rollback cannot continue."
+            echo "========================================"
+            echo "DEPLOYMENT FAILED — ROLLBACK FAILED"
+            echo "Manual intervention required."
+            echo "========================================"
             exit 1
           fi
 
@@ -198,15 +209,17 @@ jobs:
 
           for i in {1..12}; do
             if curl --fail --silent http://localhost/health; then
-              echo "Automatic rollback health check passed."
 
-              echo "Application restored to:"
+              echo "========================================"
+              echo "DEPLOYMENT FAILED — ROLLBACK SUCCEEDED"
+              echo "New deployment failed the health check."
+              echo "Previous version was restored successfully."
+              echo "Application is healthy."
+              echo "Running image:"
               echo "\$ROLLBACK_TAG"
+              echo "========================================"
 
-              echo "Current image tag remains:"
-              cat "\$APP_DIR/current_image_tag"
-
-              echo "Automatic rollback completed successfully."
+              echo "\$ROLLBACK_TAG" > "\$APP_DIR/current_image_tag"
 
               exit 1
             fi
@@ -215,7 +228,12 @@ jobs:
             sleep 5
           done
 
-          echo "Automatic rollback failed."
+          echo "========================================"
+          echo "DEPLOYMENT FAILED — ROLLBACK FAILED"
+          echo "Automatic rollback could not restore the previous version."
+          echo "Manual intervention required."
+          echo "========================================"
+
           exit 1
           EOF
           )

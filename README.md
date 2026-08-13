@@ -1107,7 +1107,7 @@ First destroy the main infrastructure:
 cd terraform
 terraform plan -destroy
 terraform destroy
-(ECR - force_delete = true)```
+(ECR & S3 - force_delete = true)```
 
 Then destroy the bootstrap resources:
 

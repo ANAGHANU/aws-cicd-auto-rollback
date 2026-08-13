@@ -132,9 +132,6 @@ jobs:
           echo "Starting application..."
           docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
-          echo "INTENTIONAL ROLLBACK TEST: stopping nginx"
-          docker compose -f docker-compose.prod.yml stop nginx
-
           echo "Container status:"
           docker compose -f docker-compose.prod.yml ps
 

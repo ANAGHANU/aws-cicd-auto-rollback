@@ -135,6 +135,9 @@ jobs:
           echo "INTENTIONAL ROLLBACK TEST: stopping nginx"
           docker compose -f docker-compose.prod.yml stop nginx
 
+          echo "Testing nginx is actually stopped..."
+          docker compose -f docker-compose.prod.yml ps nginx
+
           echo "Container status:"
           docker compose -f docker-compose.prod.yml ps
 

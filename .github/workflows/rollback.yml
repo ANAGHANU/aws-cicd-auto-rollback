@@ -49,8 +49,13 @@ jobs:
           set -e
 
           APP_DIR="/opt/devops-aws-cicd"
+          ECR_REGISTRY="340593397664.dkr.ecr.ap-south-1.amazonaws.com"
+          ECR_REPOSITORY="devops-aws-cicd-app"
+          AWS_REGION="ap-south-1"
 
           cd "$APP_DIR"
+
+          echo "Checking previous image tag..."
 
           if [ ! -f previous_image_tag ]; then
             echo "No previous image tag found. Rollback cannot continue."
@@ -64,13 +69,17 @@ jobs:
             exit 1
           fi
 
-          echo "Rolling back to image:"
+          CURRENT_TAG=$(cat current_image_tag)
+
+          echo "Current image before rollback:"
+          echo "$CURRENT_TAG"
+
+          echo "Rollback target:"
           echo "$ROLLBACK_TAG"
 
-          ECR_REGISTRY="340593397664.dkr.ecr.ap-south-1.amazonaws.com"
-          ECR_REPOSITORY="devops-aws-cicd-app"
+          echo "Logging in to ECR..."
 
-          aws ecr get-login-password --region ap-south-1 | \
+          aws ecr get-login-password --region "$AWS_REGION" | \
             docker login \
               --username AWS \
               --password-stdin "$ECR_REGISTRY"
@@ -79,7 +88,11 @@ jobs:
           export ECR_REPOSITORY
           export IMAGE_TAG="$ROLLBACK_TAG"
 
+          echo "Pulling rollback image..."
+
           docker compose -f docker-compose.prod.yml pull
+
+          echo "Starting rollback deployment..."
 
           docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
@@ -91,13 +104,7 @@ jobs:
             if curl --fail --silent http://localhost/health; then
               echo "Rollback health check passed."
 
-              CURRENT_TAG=$(cat current_image_tag)
-
-              echo "Current image before rollback:"
-              echo "$CURRENT_TAG"
-
-              echo "Rolling back to:"
-              echo "$ROLLBACK_TAG"
+              echo "Updating image tracking..."
 
               echo "$CURRENT_TAG" > previous_image_tag
               echo "$ROLLBACK_TAG" > current_image_tag
@@ -120,11 +127,13 @@ jobs:
           EOF
           )
 
+          SCRIPT_CONTENT=$(printf '%s\n' "$DEPLOY_SCRIPT" | base64 -w 0)
+
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
             --comment "Rollback application" \
-            --parameters "commands=$(printf '%s\n' "$DEPLOY_SCRIPT" | jq -R -s 'split("\n") | map(select(length > 0))')" \
+            --parameters "commands=[\"echo '$SCRIPT_CONTENT' | base64 -d > /tmp/devops-rollback.sh\", \"chmod +x /tmp/devops-rollback.sh\", \"/tmp/devops-rollback.sh\"]" \
             --query "Command.CommandId" \
             --output text)
 
@@ -151,6 +160,7 @@ jobs:
 
                 exit 0
                 ;;
+
               Failed|Cancelled|TimedOut|Cancelling)
                 echo "Rollback failed."
 

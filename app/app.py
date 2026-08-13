@@ -5,7 +5,7 @@ app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "DevOps AWS CI/CD application is running!"
+    return "DevOps AWS CI/CD application is running: rollback!"
 
 
 @app.route("/health")

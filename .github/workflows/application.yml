@@ -113,7 +113,7 @@ jobs:
               \"docker compose -f docker-compose.prod.yml up -d --remove-orphans\",
               \"docker compose -f docker-compose.prod.yml ps\",
               \"echo 'Waiting for application health check...'\",
-              \"for i in {1..12}; do if curl --fail --silent http://localhost/health; then echo 'Application health check passed.'; echo '$IMAGE_TAG' > /opt/devops-aws-cicd/current_image_tag; exit 0; fi; echo \"Health check attempt $i failed. Retrying...\"; sleep 5; done\",
+              \"for i in {1..12}; do if curl --fail --silent http://localhost/health; then echo 'Application health check passed.'; echo '$IMAGE_TAG' > /opt/devops-aws-cicd/current_image_tag; exit 0; fi; echo 'Health check attempt $i failed. Retrying...'; sleep 5; done\",
               \"echo 'Application health check failed.'\",
               \"exit 1\"
             ]" \

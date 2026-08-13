@@ -1151,6 +1151,8 @@ Verify:
 -   GitHub OIDC foundation exists.
 -   Terraform GitHub IAM role can be assumed.
 
+Terraform backend S3 bucket name: backend.tf requires the bootstrap-created S3 state bucket name
+
 Run the OIDC test workflow.
 
 Then run the Terraform workflow:

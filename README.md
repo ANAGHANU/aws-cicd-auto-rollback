@@ -1380,11 +1380,6 @@ OIDC
 SSM
 ```
 
-It does not add Kubernetes, Jenkins, Argo CD, or other tools merely to
-increase the tool count.
-
-The architecture should remain explainable and defensible.
-
 ------------------------------------------------------------------------
 
 # Known Design Limitations / Future Improvements
@@ -1416,10 +1411,7 @@ for the current project.
 
 ------------------------------------------------------------------------
 
-# Resume Points
-
-Use concise points on the resume rather than listing every
-implementation detail.
+# Points
 
 ### Option 1 --- Strong technical version
 
@@ -1443,7 +1435,7 @@ implementation detail.
 
 ------------------------------------------------------------------------
 
-# Interview Project Explanation
+# Project Explanation
 
 ## 30-second version
 
@@ -1475,8 +1467,6 @@ implementation detail.
 > check fails, and I deliberately tested both recovery paths."
 
 ------------------------------------------------------------------------
-
-# Interview Questions You Should Be Ready For
 
 ### Why Terraform?
 
